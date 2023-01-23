@@ -1,0 +1,14 @@
+{
+  "name": "moj-touki-dl-tool",
+  "version": "1.0.0",
+  "main": "index.js",
+  "module": "index.js",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "undici": "^5.22.1"
+  }
+}
