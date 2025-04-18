@@ -35,11 +35,14 @@ const ZIPS_DIR = "zips";
     const { zip_url, zip_name } = task;
     const outputPath = join(ZIPS_DIR, zip_name);
     let localFileSize = -1;
+    const controller = new AbortController(); // Create an AbortController
+    const signal = controller.signal;
 
     try {
-      // Start the download request
+      // Start the download request, passing the signal
       const response = await fetch(zip_url, {
         redirect: "follow",
+        signal, // Pass the signal here
       });
 
       if (!response.ok) {
@@ -64,26 +67,34 @@ const ZIPS_DIR = "zips";
 
       // Skip if local file exists and size matches remote size
       if (localFileSize === remoteFileSize) {
+        controller.abort(); // Abort the fetch request
         progressBar.increment();
-        // Ensure the response body is consumed and closed even if not used
-        if (response.body?.cancel) {
-          await response.body.cancel();
-        } else if (response.body?.destroy) {
-          response.body.destroy();
-        }
+        // No need to manually handle response.body anymore
         return;
       }
 
       // Proceed with download (pipe the body)
+      // Ensure the response body is readable before piping
+      if (!response.body) {
+          throw new Error(`Response body is null for ${zip_url}`);
+      }
       await pipeline(response.body, createWriteStream(outputPath));
       progressBar.increment();
     } catch (e) {
+      // Check if the error is due to the abort signal
+      if (e.name === 'AbortError') {
+        // This is expected when we skip, log silently or ignore
+        // console.log(`\nSkipped ${zip_name} (already exists and size matches)`);
+        // Progress bar is already incremented in the skip logic
+        return;
+      }
+
       const tries = task.tries || 0;
       if (tries < MAX_TRIES) {
         q.push({...task, tries: tries + 1});
         return; // Return here so progress isn't incremented on retry push
       }
-      console.error(`\nError downloading/processing ${zip_url}: ${e.message} after ${MAX_TRIES} attempts`);
+      console.error(`\nError downloading/processing ${e.message} after ${MAX_TRIES} attempts`);
       // Increment progress even on final failure to avoid stalling bar
       progressBar.increment();
     }
