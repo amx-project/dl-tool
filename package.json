@@ -6,9 +6,11 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "start": "node index.js"
+    "download:list": "node download_list.js",
+    "download:zips": "node download_zips.js"
   },
   "dependencies": {
-    "undici": "^5.22.1"
+    "async": "^3.2.6",
+    "cli-progress": "^3.12.0"
   }
 }

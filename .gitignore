@@ -1,2 +1,4 @@
 node_modules
-
+*.csv
+out_list.json
+zips
