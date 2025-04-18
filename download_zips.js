@@ -1,11 +1,12 @@
-import { readFile, mkdir, rm } from "fs/promises";
-import { createWriteStream, existsSync } from "fs";
+import { readFile, mkdir, rm, stat } from "fs/promises";
+import { createWriteStream } from "fs";
 import { pipeline } from "stream/promises";
 import { join } from "path";
 import { queue } from "async";
 import cliProgress from "cli-progress";
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
+const MAX_TRIES = 3;
 const ZIPS_DIR = "zips";
 
 (async () => {
@@ -33,28 +34,64 @@ const ZIPS_DIR = "zips";
   const q = queue(async (task) => {
     const { zip_url, zip_name } = task;
     const outputPath = join(ZIPS_DIR, zip_name);
-    if (await existsSync(outputPath)) {
-      progressBar.increment();
-      return;
-    }
+    let localFileSize = -1;
 
     try {
+      // Start the download request
       const response = await fetch(zip_url, {
         redirect: "follow",
       });
+
       if (!response.ok) {
-        throw new Error(`Failed to download ${zip_url}: ${response.statusText}`);
+        // Throw error immediately if the request itself failed (e.g., 404)
+        throw new Error(`Request failed for ${zip_url}: ${response.statusText}`);
       }
-      // Use streams for potentially large files
+
+      // Assume Content-Length is always present
+      const remoteFileSize = parseInt(response.headers.get('content-length'), 10);
+
+      // Check local file size
+      try {
+        const stats = await stat(outputPath);
+        localFileSize = stats.size;
+      } catch (err) {
+        if (err.code !== 'ENOENT') {
+          // Log other stat errors but proceed (will likely overwrite)
+          console.error(`\nError checking local file ${zip_name}: ${err.message}. Proceeding with download.`);
+        }
+        // If ENOENT, localFileSize remains -1, indicating download is needed
+      }
+
+      // Skip if local file exists and size matches remote size
+      if (localFileSize === remoteFileSize) {
+        progressBar.increment();
+        // Ensure the response body is consumed and closed even if not used
+        if (response.body?.cancel) {
+          await response.body.cancel();
+        } else if (response.body?.destroy) {
+          response.body.destroy();
+        }
+        return;
+      }
+
+      // Proceed with download (pipe the body)
       await pipeline(response.body, createWriteStream(outputPath));
       progressBar.increment();
     } catch (e) {
-      await rm(outputPath);
-      throw e;
+      const tries = task.tries || 0;
+      if (tries < MAX_TRIES) {
+        q.push({...task, tries: tries + 1});
+        return; // Return here so progress isn't incremented on retry push
+      }
+      console.error(`\nError downloading/processing ${zip_url}: ${e.message} after ${MAX_TRIES} attempts`);
+      // Increment progress even on final failure to avoid stalling bar
+      progressBar.increment();
     }
   }, CONCURRENCY);
 
-  q.error();
+  q.error((err, task) => {
+    console.error(`\nFatal error processing task ${task?.zip_name}: ${err.message}`);
+  });
 
   // Add tasks to the queue
   for (const item of out) {
