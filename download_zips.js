@@ -1,8 +1,8 @@
 import { readFile, mkdir, rm, stat } from "fs/promises";
-import { createWriteStream } from "fs";
+import { createWriteStream, existsSync } from "fs";
 import { pipeline } from "stream/promises";
 import { join } from "path";
-import { queue } from "async";
+import { queue, retry } from "async";
 import cliProgress from "cli-progress";
 
 const CONCURRENCY = 10;
@@ -35,6 +35,12 @@ const ZIPS_DIR = "zips";
     const { zip_url, zip_name } = task;
     const outputPath = join(ZIPS_DIR, zip_name);
     let localFileSize = -1;
+
+    if (existsSync(outputPath)) {
+      progressBar.increment();
+      return;
+    }
+
     const controller = new AbortController(); // Create an AbortController
     const signal = controller.signal;
 

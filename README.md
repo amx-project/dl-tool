@@ -30,3 +30,13 @@ npm run download:zips {YEAR}
 - YEAR を指定してください
 - `./zip` ディレクトリに出力されます。
 - 存在するファイルはスキップされます。
+
+FGB に変換する方は下記のツールを使ってください
+
+```shell
+# 1 zip = 1 fgb に変換
+$ ./zips_to_fgbs.sh
+
+# 作ったfgbを1つにまとめる
+$ ./merge_fgbs.sh
+```

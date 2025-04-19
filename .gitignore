@@ -2,3 +2,5 @@ node_modules
 *.csv
 out_list.json
 zips
+merged.fgb
+fgbs
