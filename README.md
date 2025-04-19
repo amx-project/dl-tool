@@ -37,6 +37,9 @@ FGB に変換する方は下記のツールを使ってください
 # 1 zip = 1 fgb に変換
 $ ./zips_to_fgbs.sh
 
-# 作ったfgbを1つにまとめる
-$ ./merge_fgbs.sh
+# 作ったfgbをPostGISテーブルにインポートする
+$ ./merge_fgbs.sh PG:"..."
+
+# PostGIS からfgbにエクスポート
+$ rm ./merged.fgb; ogr2ogr -f FlatGeobuf ./merged.fgb PG:"..." mojxml -t_srs EPSG:4326 -lco SPATIAL_INDEX=NO
 ```
