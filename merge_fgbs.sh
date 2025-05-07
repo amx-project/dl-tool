@@ -1,21 +1,20 @@
 #!/bin/bash -e
 
-# Define input directory
-INPUT_DIR="./fgbs"
-# Define the target table name
-PG_TABLE="mojxml"
-# Define the maximum number of parallel processes for appending
-MAX_PROCESSES=20
+# Define default values
+DEFAULT_INPUT_DIR="./fgbs"
+DEFAULT_PG_TABLE="mojxml"
 
-# Check for connection string argument
-if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <PostgreSQL Connection String>"
-    echo "Example: $0 \"PG:dbname=your_db host=localhost user=your_user\""
+# Parse command line arguments
+if [ "$#" -lt 1 ] || [ "$#" -gt 3 ]; then
+    echo "Usage: $0 <PostgreSQL Connection String> [Input Directory] [Table Name]"
+    echo "Example: $0 \"PG:dbname=your_db host=localhost user=your_user\" \"./my_fgbs\" \"my_table\""
     exit 1
 fi
 
-# Assign argument to variable
+# Assign arguments to variables
 PG_CONN_STRING="$1"
+INPUT_DIR="${2:-$DEFAULT_INPUT_DIR}"  # Use default if not provided
+PG_TABLE="${3:-$DEFAULT_PG_TABLE}"    # Use default if not provided
 
 # Check if input directory exists
 if [ ! -d "$INPUT_DIR" ]; then
@@ -24,7 +23,6 @@ if [ ! -d "$INPUT_DIR" ]; then
 fi
 
 # Find all .fgb files in the input directory
-# Use find and sort for consistent processing order (optional but good practice)
 FGB_FILES=$(find "$INPUT_DIR" -maxdepth 1 -name '*.fgb' -print0 | sort -z | tr '\0' '\n')
 
 # Check if any .fgb files were found
@@ -43,18 +41,14 @@ echo "Processing first file to create table: $FIRST_FGB_FILE..."
 ogr2ogr -f PostgreSQL "$PG_CONN_STRING" "$FIRST_FGB_FILE" -nln "$PG_TABLE" --config PG_USE_COPY=YES
 
 # Get the list of remaining files (skip the first one)
-# Use tail +2 with process substitution for null-separated input
 REMAINING_FGB_FILES=$(echo "$FGB_FILES" | tail -n +2)
 
 # Check if there are remaining files to process
 if [ -n "$REMAINING_FGB_FILES" ]; then
     echo "Appending remaining files in parallel (max $MAX_PROCESSES processes)..."
-    # Use printf and xargs for parallel processing
-    # The -I {} replaces {} with each input file path
-    # The sh -c '...' executes the ogr2ogr command for each file
-    printf '%s' "$REMAINING_FGB_FILES" | xargs -d '\n' -I {} -P "$MAX_PROCESSES" sh -c \
-        'echo "Appending {}..." && ogr2ogr -f PostgreSQL -update -append "$1" "{}" -nln "$2" --config PG_USE_COPY=YES' \
-        sh "$PG_CONN_STRING" "$PG_TABLE"
+    # Use GNU parallel with progress bar
+    echo "$REMAINING_FGB_FILES" | parallel --bar \
+        "ogr2ogr -f PostgreSQL -update -append '$PG_CONN_STRING' {} -nln '$PG_TABLE' --config PG_USE_COPY=YES"
 else
     echo "Only one file found, no parallel appending needed."
 fi

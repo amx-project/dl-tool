@@ -21,7 +21,7 @@ do
 
   echo "Processing $zipfile..."
   # Run the conversion tool
-  mojxml2ogr "$OUTPUT_FGB" "$zipfile"
+  mojxml-rs "$OUTPUT_FGB" "$zipfile"
 done
 
 echo "All zip files processed."

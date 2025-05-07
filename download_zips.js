@@ -11,17 +11,26 @@ const ZIPS_DIR = "zips";
 
 (async () => {
   const year = process.argv[2];
+  const prefixFilter = process.argv[3]; // Add optional prefix filter argument
+  
   if (!year) {
-    console.error("Usage: node download_zips.js <year>");
+    console.error("Usage: node download_zips.js <year> [prefix_filter]");
     process.exit(1);
   }
   const list = JSON.parse(await readFile("out_list.json", "utf-8"));
-  const out = list.filter(x => x.year === year);
+  let out = list.filter(x => x.year === year);
+  
+  // Apply prefix filter if provided
+  if (prefixFilter) {
+    out = out.filter(x => x.zip_name.startsWith(prefixFilter));
+    console.log(`Filtering by prefix: ${prefixFilter}`);
+  }
+  
   if (out.length === 0) {
-    console.error(`No datasets found for year ${year}`);
+    console.error(`No datasets found for year ${year}${prefixFilter ? ` with prefix ${prefixFilter}` : ''}`);
     process.exit(1);
   }
-  console.log(`Downloading ${out.length} datasets for year ${year}`);
+  console.log(`Downloading ${out.length} datasets for year ${year}${prefixFilter ? ` with prefix ${prefixFilter}` : ''}`);
 
   // Ensure the output directory exists
   await mkdir(ZIPS_DIR, { recursive: true });
